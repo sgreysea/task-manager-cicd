@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Единый Jenkinsfile для двух лабораторных работ (проект task-manager-cicd).
  *
  * Часть 1, задание № 12 — параметризованный запуск с выбором набора проверок:
@@ -25,7 +25,7 @@
 pipeline {
 
     agent {
-        label 'windows-java21-agent'
+        any
     }
 
     options {
