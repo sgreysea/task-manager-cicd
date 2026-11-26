@@ -25,6 +25,11 @@
 pipeline {
 
     agent any
+    tools {
+        maven 'maven3'
+    }
+
+
 
 
     options {
