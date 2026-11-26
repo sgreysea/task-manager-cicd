@@ -24,9 +24,8 @@
  */
 pipeline {
 
-    agent {
-        any
-    }
+    agent any
+
 
     options {
         timestamps()
