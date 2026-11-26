@@ -1,0 +1,113 @@
+name: Java Application CI
+
+# Основной Workflow (push в main и feature/**, ручной запуск).
+# Pull Request проверяет отдельный Workflow: pr-check.yml (задание № 12).
+
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'FULL — unit + integration + JAR; UNIT_ONLY — только модульные тесты'
+        type: choice
+        options:
+          - FULL
+          - UNIT_ONLY
+        default: FULL
+
+permissions:
+  contents: read
+
+concurrency:
+  group: java-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # При push inputs пусты, поэтому по умолчанию FULL
+  TEST_MODE: ${{ inputs.test_mode || 'FULL' }}
+
+jobs:
+  verify:
+    name: Build, unit and integration tests
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Show toolchain
+        shell: pwsh
+        run: |
+          java -version
+          mvn -version
+          git --version
+
+      - name: Build and verify (FULL)
+        if: ${{ env.TEST_MODE == 'FULL' }}
+        shell: pwsh
+        run: mvn -B -ntp clean verify
+
+      - name: Unit tests only (UNIT_ONLY)
+        if: ${{ env.TEST_MODE == 'UNIT_ONLY' }}
+        shell: pwsh
+        run: mvn -B -ntp clean test
+
+      - name: Generate Surefire HTML report
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path 'target/surefire-reports') {
+            mvn -B -ntp surefire-report:report-only
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
+          } else {
+            Write-Host 'Surefire reports are absent.'
+          }
+
+      - name: Generate JaCoCo HTML report
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path 'target/jacoco.exec') {
+            mvn -B -ntp jacoco:report
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
+          } else {
+            Write-Host 'JaCoCo execution data is absent.'
+          }
+
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports-windows
+          path: |
+            target/surefire-reports/**
+            target/failsafe-reports/**
+            target/site/surefire-report.html
+            target/site/jacoco/**
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload executable JAR
+        if: ${{ success() && env.TEST_MODE == 'FULL' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: task-manager-jar
+          path: target/task-manager-cicd-1.0.0.jar
+          if-no-files-found: error
+          retention-days: 7

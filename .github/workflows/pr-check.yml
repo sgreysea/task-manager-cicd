@@ -1,0 +1,85 @@
+name: Pull Request Check
+
+# Задание № 12: отдельный Workflow проверки Pull Request с минимальными правами доступа.
+#
+# Принципы безопасности:
+#  - событие pull_request (а не pull_request_target): код из PR выполняется
+#    без доступа к секретам репозитория, для PR из форков токен только на чтение;
+#  - права GITHUB_TOKEN сведены к одному: contents: read;
+#  - токен не сохраняется в .git после checkout (persist-credentials: false);
+#  - секреты не используются, публикация и запись в репозиторий не выполняются.
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Минимальные права на уровне всего Workflow
+permissions:
+  contents: read
+
+# Для каждого PR своя группа: новая проверка отменяет устаревшую
+concurrency:
+  group: pr-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-verify:
+    name: Verify pull request
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    # Права повторно ограничены на уровне задания
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Show toolchain
+        shell: pwsh
+        run: |
+          java -version
+          mvn -version
+
+      - name: Build and verify
+        shell: pwsh
+        run: mvn -B -ntp clean verify
+
+      - name: Generate JaCoCo HTML report
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path 'target/jacoco.exec') {
+            mvn -B -ntp jacoco:report
+            if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+            }
+          } else {
+            Write-Host 'JaCoCo execution data is absent.'
+          }
+
+      # Отчёты нужны для диагностики; JAR для PR не публикуется
+      - name: Upload PR reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pr-test-reports
+          path: |
+            target/surefire-reports/**
+            target/failsafe-reports/**
+            target/site/jacoco/**
+          if-no-files-found: warn
+          retention-days: 3
