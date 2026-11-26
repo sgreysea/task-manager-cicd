@@ -13,7 +13,9 @@
  *                            учётные данные и публикация не используются (только чтение).
  *   RUN_TYPE = BRANCH_BUILD -> обычная сборка ветки (аналог ci.yml).
  *
- * Соответствие Jenkins -> GitHub Actions:
+ * Сgit add .
+    git commit -m "Test pull request check"
+    git push -u origin feature/pr-testоответствие Jenkins -> GitHub Actions:
  *   RUN_TYPE=BRANCH_BUILD  -> ci.yml (push, workflow_dispatch с test_mode)
  *   RUN_TYPE=PR_CHECK      -> pr-check.yml (pull_request, permissions: contents: read)
  *   TEST_MODE              -> inputs.test_mode
